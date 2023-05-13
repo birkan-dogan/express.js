@@ -141,3 +141,167 @@ mongoose.connect('mongodb+srv://<username>:<password>@<cluster>.mongodb.net/<dat
 
 // connect() method returns a promise, so we should handle it.
 ```
+### Create a simple mongoose-schema and create documents in mongodb
+> **in model.js**
+```javascript
+const mongoose = require('mongoose');
+
+const Schema = mongoose.Schema;
+
+const ProductSchema = new Schema({
+  name: {
+    type: String,
+    required: [true, "A tour must have a name"],
+    unique: true,
+    trim: true,
+    // trim only works for strings
+  },
+  description: {
+    type: String,
+    required: [true, "A tour must have a duration"],
+  },
+  price: {
+    type: Number,
+    required: true,
+  },
+  date: {
+    type: Date,
+    default: Date.now,
+  },
+  image: {
+    type: [String],
+    required: true,
+  }
+});
+
+// create a model from the schema
+const Product = mongoose.model('Product', ProductSchema);
+
+module.exports = Product;
+
+```
+> **in controller.js**, create documents by using this model and after that, we should declare an endpoint for this function.
+```javascript
+exports.createProduct = async (req, res) => {
+  try {
+    const newProduct = await Product.create(req.body);
+    // create() method returns a promise
+
+    res.status(201).json({
+      status: "success",
+      data: {
+        newProduct
+      },
+    });
+  } catch (error) {
+    res.status(400).json({ status: "fail", message: error });
+  }
+};
+```
+> endpoint for POST request **in router.js**
+```javascript
+const express = require("express");
+
+const { createProduct } = require("../controller/productController");
+
+const router = express.Router();
+
+router.route("/").post(createProduct);
+
+module.exports = router;
+// and we can use the router in app.js file
+``` 
+### Reading documents that comes from mongodb by using mongoose
+```javascript
+// get all documents 
+
+exports.getAllProducts = async (req, res) => {
+  try {
+    const products = await Product.find();
+    // .find() method returns all the documents and promise
+
+    res.status(200).json({
+      status: "success",
+      data: {
+        products
+      },
+    });
+  } catch (error) {
+    res.status(404).json({
+      status: "fail",
+      message: error,
+    });
+  }
+};
+```
+
+```javascript
+// get specific document
+
+exports.getProduct = async (req, res) => {
+  try {
+    const product = await Product.findById(req.params.id);
+    // .findById() method is mongoose feature
+    res.status(200).json({
+      status: "success",
+      data: {
+        product,
+      },
+    });
+  } catch (error) {
+    res.status(404).json({
+      status: "fail",
+      message: error,
+    });
+  }
+};
+```
+
+> We have access this function by using the special endpoint
+```javascript
+router.route("/:id").get(getProduct);
+```
+### Update product based on the parameter in the url.
+```javascript
+
+exports.updateProduct = async (req, res) => {
+  try {
+    const product = await Product.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
+
+    res.status(200).json({
+      status: "success",
+      data: { product },
+    });
+  } catch (error) {
+    res.status(400).json({ status: "fail", message: error });
+  }
+};
+```
+- **{ new: true }**: This parameter tells Mongoose to return the updated document after the update operation is complete. If we omit this parameter, the method will return the old document before it was updated.
+- **{ runValidators: true }**: This parameter tells Mongoose to run the validators specified in your schema when performing the update operation. This includes things like checking for required fields and validating data types.
+
+```javascript
+// also, we can use the same endpoint, but different http method
+router.route("/:id").get(getProduct).patch(updateProduct); 
+```
+
+### Delete product based on the parameter in the url.
+```javascript
+exports.deleteProduct = async (req, res) => {
+  try {
+    await Product.findByIdAndDelete(req.params.id);
+
+    res.status(204).json({
+      status: "success",
+      data: null,
+    });
+  } catch (error) {
+    res.status(400).json({ status: "fail", message: error });
+  }
+};
+```
+> endpoint for that:
+```javascript
+router.route("/:id").get(getProduct).patch(updateProduct).delete(deleteProduct);
+```
+
