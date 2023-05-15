@@ -304,4 +304,195 @@ exports.deleteProduct = async (req, res) => {
 ```javascript
 router.route("/:id").get(getProduct).patch(updateProduct).delete(deleteProduct);
 ```
+### Aggregation Pipeline
+The aggregation pipeline is a powerful feature that allows us to perform complex queries and data manipulations on MongoDB collections. It provides a framework for specifying a sequence of data processing steps that are applied to documents in a collection, allowing us to perform operations such as filtering, sorting, grouping, and transforming data.  
 
+The aggregation pipeline consists of one or more stages, with each stage representing a clear data processing step. Each stage takes input from the previous stage, processes the data, and outputs the results to the next stage. The output of the final stage is the result of the entire pipeline.  
+
+**Some of the common stages used in the aggregation pipeline include:**  
+- **$match:** filters documents based on certain conditions.
+- **$group:** groups documents based on a specified key and performs aggregate functions on each group.  
+- **$sort:** sorts documents based on specified criteria.
+- **$project:** selects specific fields from the documents and optionally transforms them.
+- **$limit:** limits the number of documents in the output.
+- **$skip:** skips a specified number of documents in the input.
+- **$unwind:** to flatten an array field in a document. When we use **$unwind**, it creates a new document for each element in the array and duplicates the values of the other fields in the original document for each of those documents.
+
+Using the aggregation pipeline, we can perform complex queries and data manipulations on MongoDB collections with a single query. This can be more efficient and flexible than using multiple queries or manipulating data in code.  
+
+A new schema to implement aggregation pipeline:
+```javascript
+const userSchema = new Schema({
+  name: {
+    type: String,
+    required: [true, "A user must have a name"],
+    trim: true,
+  },
+  email: {
+    type: String,
+    required: [true, "A user must have an email"],
+    unique: true,
+    lowercase: true,
+    trim: true,
+  },
+  password: {
+    type: String,
+    required: [true, "A user must have a password"],
+    minlength: 8,
+    select: false,
+  },
+  age: {
+    type: Number,
+    required: [true, "A user must have an age field"],
+    min: [18, "A user must be at least 18 years old"],
+  },
+  createdAt: {
+    type: Date,
+    default: Date.now,
+  },
+  active: {
+    type: Boolean,
+    default: true,
+  },
+  products: [
+    {
+      title: {
+        type: String,
+        required: [true, "A product must have a title"],
+      },
+      description: {
+        type: String,
+        required: [true, "A product must have content"],
+      },
+      soldAt: {
+        type: Date,
+        default: Date.now,
+      },
+      tags: [String],
+    },
+  ],
+});
+```
+> *Aggregate Pipeline Function*
+```javascript
+
+/*
+an aggregation pipeline to group posts by tag, count the
+number of posts in each group, and sort the groups by count in descending order:
+*/
+
+exports.tagsAndCount = async (req, res) => {
+  try {
+    const pipeline = await User.aggregate([
+      // Unwind the posts array to create a separate document for each post
+      { $unwind: "$products" },
+
+      // Group posts by tag and count the number of posts in each group
+      {
+        $group: {
+          _id: "$products.title",
+          count: { $sum: 1 },
+        },
+      },
+
+      // Sort the groups by count in descending order
+      { $sort: { count: -1 } },
+    ]);
+
+    res.status(200).json({
+      status: "success",
+      result: pipeline.length,
+      data: pipeline,
+    });
+  } catch (error) {
+    res.status(400).json({ status: "fail", message: error });
+  }
+};
+```
+```javascript
+/*
+aggregation pipeline that finds all active users, groups them by age range, and calculates the average age and the total 
+number of users in each age group:
+*/
+exports.projectAnalyse = async (req, res) => {
+  try {
+    const userPipeline = await User.aggregate([
+      // Match users with active status
+      { $match: { active: true } },
+
+      // Project a new field with the age range for each user
+      {
+        $project: {
+          _id: 1,
+          name: 1,
+          email: 1,
+          age: 1,
+          ageRange: {
+            $switch: {
+              // https://www.mongodb.com/docs/manual/reference/operator/aggregation/switch/#mongodb-expression-exp.-switch
+              branches: [
+                { case: { $lte: ["$age", 25] }, then: "18-25" },
+                { case: { $lte: ["$age", 35] }, then: "26-35" },
+                { case: { $lte: ["$age", 50] }, then: "36-50" },
+                { case: { $gt: ["$age", 50] }, then: "Over 50" },
+              ],
+              default: "Unknown",
+            },
+          },
+        },
+      },
+
+      // Group users by age range, calculate the average age, the total number of users, and push the names into an array.
+      {
+        $group: {
+          _id: "$ageRange",
+          avgAge: { $avg: "$age" },
+          totalUsers: { $sum: 1 },
+          name: { $push: "$name" },
+        },
+      },
+
+      // Sort the age groups by average age in descending order
+      { $sort: { avgAge: -1 } },
+    ]);
+
+    res.status(200).json({ status: "success", data: userPipeline });
+  } catch (error) {
+    res.status(400).json({ status: "fail", message: error });
+  }
+};
+
+```
+> To find the top 5 active users with the highest number of products, and includes their names, email addresses, and the count of their products:
+```javascript
+
+exports.topFive = async (req, res) => {
+  try {
+    const topFive = await User.aggregate([
+      // Match users with active status
+      {
+        $match: { active: true },
+      },
+
+      // Project necessary fields
+      {
+        $project: {
+          name: 1,
+          email: 1,
+          numProducts: { $size: "$products" },
+        },
+      },
+
+      // Sort users by the number of products in descending order
+      { $sort: { numPosts: -1 } },
+
+      // Limit the result to the top 5 users
+      { $limit: 5 },
+    ]);
+
+    res.status(200).json({ status: "success", result: topFive.length, data: topFive });
+  } catch (error) {
+    res.status(400).json({ status: "fail", message: error });
+  }
+};
+```
