@@ -496,3 +496,98 @@ exports.topFive = async (req, res) => {
   }
 };
 ```
+
+## Mongoose Middlewares
+Middleware in Mongoose allows us to define functions that execute at specific points in the lifecycle of a Mongoose model or document.  
+
+Middleware functions can be used for various purposes, such as performing validation, modifying data, logging, or executing additional logic before or after specific operations.  
+- **Validation:** We can use pre-save middleware to perform data validation before saving a document to the database. This allows us to ensure that the data meets certain criteria or apply custom validation logic.
+- **Data manipulation:** Middleware functions provide an opportunity to manipulate the data before saving or retrieving it. For example, we can hash passwords, format dates, or transform the data in any desired way.  
+- **Logging:** Middleware functions can be used to log specific events or actions related to your documents or queries. This can help with debugging, auditing, or monitoring the application. 
+- **Triggering actions:** We can use middleware to trigger actions or update related documents when a specific operation occurs. For example, we might want to update a counter or send a notification when a document is saved or removed.
+- **Error handling:** Middleware can be used to handle errors or perform cleanup operations in case an error occurs during a specific operation. This helps us centralize error handling and keep our code clean and maintainable.
+- **Complex operations:** Middleware allows us to break down complex operations into smaller, manageable pieces. We can execute different parts of the operation in separate middleware functions, making our code more organized and easier to understand.  
+
+By using middleware, we can add reusable and customizable logic to our Mongoose models, making it easier to maintain and extend our application.  
+
+> Mongoose middleware functions can be categorized into 4 types:  
+
+**1) Document middleware:** These functions are executed for specific document instances. They include the following middleware types:  
+- **pre** middleware: These functions are executed before a specific operation on a document, such as *save*, *validate*, or *remove*.
+- **post** middleware: These functions are executed after a specific operation on a document, such as *save*, *validate*, or *remove*.  
+> in model.js
+```javascript
+const mongoose = require('mongoose');
+
+const Schema = mongoose.Schema;
+
+const schema = new Schema({
+  name: String,
+  age: Number
+});
+
+schema.pre('create', function(next) {
+  // This middleware function will be executed before saving a document
+  console.log('Saving document...');
+  next();
+});
+
+schema.post('create', function(doc, next) {
+  // This middleware function will be executed after saving a document
+  console.log('Document saved:', doc);
+  next();
+});
+
+```
+**2) Query middleware:** Query Middleware allows us to run functions before or after a certain query is executed.  
+
+> We have a User model and we want to implement access control to limit certain users from accessing sensitive data. We can use query middleware to automatically modify the query based on the user's permissions.   
+
+> in `model.js`
+```javascript
+
+const mongoose = require('mongoose');
+
+const userSchema = new mongoose.Schema({
+  name: String,
+  role: String
+});
+
+const User = mongoose.model('User', userSchema);
+
+module.exports = User;
+
+
+```
+- Now, let's say we have a sensitive field called secretData in the User collection that should only be accessible to users with the role of "admin". We can use query middleware to check all queries to the User collection and modify them to include an additional condition for role-based access control.
+
+```javascript
+
+const User = require('./user'); // Importing the User model
+
+// Query middleware for 'find' operation on User collection
+User.schema.pre(/^find/, function() {
+  // Get the current user's role from the context or wherever we store user information
+  const currentUserRole = 'admin';
+
+  // Modify the query to include the role-based access control condition
+  if (currentUserRole !== 'admin') {
+    this.find({ role:{ $ne: 'admin' }});
+  }
+});
+```
+**3) Aggregation Middleware:** Aggregation middleware in Mongoose allows us to define functions that are executed before or after an aggregation operation is performed on a model. Aggregation middleware provides hooks at different stages of the aggregation pipeline, allowing us to add custom logic and manipulate the aggregation results.  
+- `Pre` aggregate: Executed before an aggregation operation starts.
+- `Post` aggregate: Executed after an aggregation operation is completed.
+
+```javascript
+schema.pre('aggregate', function() {
+  // This middleware function will be executed before an aggregation operation
+  console.log('Executing aggregation...');
+});
+
+schema.post('aggregate', function(result) {
+  // This middleware function will be executed after an aggregation operation
+  console.log('Aggregation completed:', result);
+});
+```
